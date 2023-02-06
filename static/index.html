@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Socket Snake</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        ul {
+            list-style-type: none;
+            overflow: auto;
+            height: calc(100vh - 40px);
+        }
+
+        canvas {
+            border: 1px solid black;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .main {
+            flex: 3;
+            border: 1px solid;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar {
+            flex: 1;
+            border: 1px solid;
+            padding: 8px;
+        }
+    </style>
+</head>
+
+<body onload="load()">
+    <div class="container">
+        <div class="main">
+            <div>
+                <div>
+                    Score: <span id="score">0</span>
+                </div>
+
+                <canvas id="board" width="300" height="600">Canvas did not load</canvas>
+            </div>
+        </div>
+        <div class="sidebar">
+            <div>Player Positions</div>
+            <ul id="position"></ul>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        var localPlayers = {};
+        var x = 0;
+        var y = 0;
+        var xPrize = -1;
+        var yPrize = -1;
+        var score = 0;
+        var color = `rgb(${getRandomBetween(0, 255)}, ${getRandomBetween(0, 255)}, ${getRandomBetween(0, 255)})`;
+
+        var position = document.getElementById('position');
+        var scoreHtml = document.getElementById('score');
+        const canvas = document.getElementById("board");
+
+        function getRandomBetween(min, max) {
+            return Math.floor(Math.random() * (max - min) + min);
+        }
+
+        function move(e) {
+            e = e || window.event;
+
+            switch (e.keyCode) {
+                case 119:
+                    if (y > 0) {
+                        y -= 10;
+                    }
+                    break;
+                case 97:
+                    if (x > 0) {
+                        x -= 10;
+                    }
+                    break;
+                case 115:
+                    if (y < 590) {
+                        y += 10;
+                    }
+                    break;
+                case 100:
+                    if (x < 290) {
+                        x += 10;
+                    }
+                    break
+            }
+
+            if (xPrize === x && yPrize === y) {
+                score += 10;
+
+                scoreHtml.innerHTML = score;
+                socket.emit('point');
+            }
+
+            socket.emit('move', { x, y, score, color });
+        };
+
+        function draw() {
+            const ctx = canvas.getContext("2d");
+
+            ctx.clearRect(0, 0, 300, 600)
+
+            Object.keys(localPlayers).forEach(player => {
+                if (player === 'prize') {
+                    xPrize = localPlayers[player].x;
+                    yPrize = localPlayers[player].y;
+
+                    ctx.beginPath()
+                    ctx.arc(localPlayers[player].x + 5, localPlayers[player].y + 5, 5, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = 'red';
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = localPlayers[player].color;
+
+                    ctx.fillRect(
+                        localPlayers[player].x,
+                        localPlayers[player].y,
+                        10,
+                        10
+                    );
+                }
+            });
+
+            window.requestAnimationFrame(draw);
+        }
+
+        function load() {
+            if (canvas.getContext) {
+                socket.on('update', function (msg) {
+                    localPlayers = JSON.parse(msg);
+
+                    position.innerHTML = '';
+
+                    Object.keys(localPlayers).forEach(player => {
+                        var item = document.createElement('li');
+
+                        item.textContent = JSON.stringify({ player, ...localPlayers[player] });
+
+                        position.appendChild(item);
+                    });
+                });
+
+                socket.emit('move', { x, y, score, color });
+                document.onkeypress = move;
+                window.requestAnimationFrame(draw);
+            } else {
+                alert('Canvas is not supported');
+            }
+        }
+    </script>
+</body>
+
+</html>
